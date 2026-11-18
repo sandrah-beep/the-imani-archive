@@ -3,7 +3,7 @@ export type Product = {
   name: string;
   short_description?: string | null;
   description?: string | null;
-  category: "lip" | "archive" | "accessories" | "clothing";
+  category: "lip_sets" | "archive_sets" | "accessories" | "clothing";
   price: number;
   stock_quantity: number;
   is_available: boolean;
