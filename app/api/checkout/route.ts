@@ -1,26 +1,153 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const admin = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{autoRefreshToken:false,persistSession:false}});
-export async function POST(req:Request){
- try{
-  const body=await req.json();const c=body.customer;const items=body.items;
-  if(!c?.name||!c?.phone||!c?.address||!c?.district||!Array.isArray(items)||!items.length)return NextResponse.json({error:"Please complete your delivery details and bag."},{status:400});
-  const ids=items.map((x:any)=>x.product_id);if(ids.some((x:any)=>typeof x!=="string"))return NextResponse.json({error:"Invalid products."},{status:400});
-  const sb=admin();const {data:products,error}=await sb.from("products").select("id,name,price,stock_quantity,is_available").in("id",ids);
-  if(error||!products||products.length!==ids.length)return NextResponse.json({error:"One or more products are no longer available."},{status:400});
-  const lines=items.map((i:any)=>{const p=products.find(x=>x.id===i.product_id);if(!p||!p.is_available||i.quantity<1||i.quantity>p.stock_quantity)throw new Error("A product is unavailable or has insufficient stock.");return {product_id:p.id,product_name:p.name,quantity:i.quantity,unit_price:p.price,line_total:p.price*i.quantity};});
-  const total=lines.reduce((s:any,x:any)=>s+x.line_total,0);
-  const {data:order,error:orderError}=await sb.from("orders").insert({customer_name:c.name,phone:c.phone,email:c.email||null,delivery_address:c.address,district:c.district,delivery_notes:c.notes||null,total_amount:total,order_status:"new",payment_status:"pending"}).select("id").single();
-  if(orderError||!order)return NextResponse.json({error:orderError?.message||"Could not create order."},{status:500});
-  const {error:itemError}=await sb.from("order_items").insert(lines.map((x:any)=>({...x,order_id:order.id})));
-  if(itemError){await sb.from("orders").delete().eq("id",order.id);return NextResponse.json({error:"Could not save order items."},{status:500});}
-  if(!process.env.FLW_SECRET_KEY)return NextResponse.json({order_id:order.id,payment_link:null,message:"Payment provider not configured."});
-  const site=process.env.NEXT_PUBLIC_SITE_URL||new URL(req.url).origin;
-  const txRef=`imani-${order.id}`;
-  const flw=await fetch("https://api.flutterwave.com/v3/payments",{method:"POST",headers:{"Authorization":`Bearer ${process.env.FLW_SECRET_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({tx_ref:txRef,amount:total,currency:"UGX",redirect_url:`${site}/payment/return`,customer:{email:c.email||"orders@theimaniarchive.com",phonenumber:c.phone,name:c.name},customizations:{title:"The Imani Archive",description:"Order payment"},meta:{order_id:order.id}})});
-  const result=await flw.json();if(!flw.ok||result.status!=="success")return NextResponse.json({order_id:order.id,error:"Order saved, but payment could not be started. Please contact the shop."},{status:502});
-  await sb.from("orders").update({payment_reference:txRef}).eq("id",order.id);
-  return NextResponse.json({order_id:order.id,payment_link:result.data?.link});
- }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Unexpected checkout error."},{status:400});}
+const admin = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+export async function POST(req: Request) {
+  const sb = admin();
+  try {
+    const body = await req.json();
+    const c = body.customer;
+    const items = body.items;
+
+    if (!c?.name || !c?.phone || !c?.address || !c?.district ||
+        !["MTN", "Airtel"].includes(c?.paymentNetwork) ||
+        !Array.isArray(items) || !items.length) {
+      return NextResponse.json({ error: "Please complete your details, choose MTN or Airtel Money, and check your bag." }, { status: 400 });
+    }
+
+    const ids = items.map((x: any) => x.product_id);
+    if (ids.some((x: any) => typeof x !== "string")) {
+      return NextResponse.json({ error: "Invalid products." }, { status: 400 });
+    }
+
+    const { data: products, error: productError } = await sb
+      .from("products")
+      .select("id,name,price,stock_quantity,is_available")
+      .in("id", ids);
+
+    if (productError || !products || products.length !== ids.length) {
+      return NextResponse.json({ error: "One or more products are no longer available." }, { status: 400 });
+    }
+
+    const lines = items.map((item: any) => {
+      const product = products.find((p: any) => p.id === item.product_id);
+      const quantity = Number(item.quantity);
+      if (!product || !product.is_available || !Number.isInteger(quantity) ||
+          quantity < 1 || quantity > product.stock_quantity) {
+        throw new Error("A product is unavailable or has insufficient stock.");
+      }
+      return {
+        product_id: product.id,
+        product_name: product.name,
+        quantity,
+        unit_price: Number(product.price),
+        line_total: Number(product.price) * quantity
+      };
+    });
+
+    const subtotal = lines.reduce((sum: number, line: any) => sum + line.line_total, 0);
+    const reference = `TIA-${Date.now().toString(36).toUpperCase()}`;
+
+    // The customers table requires full_name and phone; its UUID is generated by Supabase.
+    const { data: customer, error: customerError } = await sb
+      .from("customers")
+      .insert({ full_name: c.name, phone: c.phone, email: c.email || null })
+      .select("id")
+      .single();
+
+    if (customerError || !customer) {
+      return NextResponse.json({ error: "We couldn't save your customer details. Please try again." }, { status: 500 });
+    }
+
+    // These fields match the required columns in the existing public.orders table.
+    const { data: order, error: orderError } = await sb
+      .from("orders")
+      .insert({
+        order_reference: reference,
+        customer_id: customer.id,
+        customer_name: c.name,
+        customer_phone: c.phone,
+        subtotal,
+        total_amount: subtotal,
+        payment_network: c.paymentNetwork,
+        payment_phone: c.paymentPhone || c.phone,
+        delivery_address: c.address,
+        delivery_district: c.district
+      })
+      .select("id,order_reference")
+      .single();
+
+    if (orderError || !order) {
+      return NextResponse.json({ error: "We couldn't create your order. Please try again." }, { status: 500 });
+    }
+
+    const { error: itemError } = await sb.from("order_items").insert(
+      lines.map((line: any) => ({ ...line, order_id: order.id }))
+    );
+
+    if (itemError) {
+      await sb.from("orders").delete().eq("id", order.id);
+      return NextResponse.json({ error: "We couldn't save your order items." }, { status: 500 });
+    }
+
+    if (!process.env.FLW_SECRET_KEY) {
+      return NextResponse.json({
+        order_id: order.id,
+        order_reference: order.order_reference,
+        payment_link: null,
+        message: "Order saved. Payment provider is not configured yet."
+      });
+    }
+
+    const site = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
+    const txRef = `imani-${order.id}`;
+    const payment = await fetch("https://api.flutterwave.com/v3/payments", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        tx_ref: txRef,
+        amount: subtotal,
+        currency: "UGX",
+        redirect_url: `${site}/payment/return`,
+        customer: {
+          email: c.email || "orders@theimaniarchive.com",
+          phonenumber: c.paymentPhone || c.phone,
+          name: c.name
+        },
+        payment_options: "mobilemoneyuganda",
+        meta: { order_id: order.id, order_reference: order.order_reference },
+        customizations: {
+          title: "The Imani Archive",
+          description: `Order ${order.order_reference}`
+        }
+      })
+    });
+
+    const result = await payment.json();
+    if (!payment.ok || result.status !== "success" || !result.data?.link) {
+      return NextResponse.json({
+        order_id: order.id,
+        order_reference: order.order_reference,
+        error: "Your order was saved, but payment could not be started. Please contact the shop."
+      }, { status: 502 });
+    }
+
+    return NextResponse.json({
+      order_id: order.id,
+      order_reference: order.order_reference,
+      payment_link: result.data.link
+    });
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : "Unexpected checkout error."
+    }, { status: 400 });
+  }
 }
