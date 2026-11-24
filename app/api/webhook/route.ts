@@ -39,7 +39,9 @@ export async function POST(req: Request) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    if (eventType === "collection.completed" && tx?.status === "completed") {
+    // MarzPay's transaction lookup documentation uses "successful"; webhook events
+    // use "collection.completed". Accept both successful terminal representations.
+    if (eventType === "collection.completed" && ["completed", "successful"].includes(tx?.status)) {
       await sb.from("orders")
         .update({ payment_status: "paid", order_status: "confirmed" })
         .eq("order_reference", reference)
