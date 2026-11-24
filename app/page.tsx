@@ -40,7 +40,7 @@ export default function Home() {
       const data=await response.json();
       if(!response.ok) throw new Error(data.error||"Could not start checkout.");
       if(data.payment_link) window.location.href=data.payment_link;
-      else setMessage("Your order request was received. Payment setup is not enabled yet — please contact the shop before paying.");
+      else setMessage(data.message || "Payment request sent. Check your phone for the Mobile Money prompt.");
     }catch(err){setMessage(err instanceof Error?err.message:"Something went wrong.");}
   }
 
