@@ -17,9 +17,10 @@ function ugandaPhone(value: string) {
 }
 
 function detectedNetwork(phone: string) {
+  // phone is normalized to +256XXXXXXXXX, so the leading local 0 is absent.
   const national = phone.slice(4);
-  if (/^07[0-5]/.test(national)) return "Airtel";
-  if (/^07[6-8]/.test(national) || /^03[19]/.test(national)) return "MTN";
+  if (/^7[0-5]/.test(national)) return "Airtel";
+  if (/^7[6-8]/.test(national) || /^3[19]/.test(national)) return "MTN";
   return null;
 }
 
