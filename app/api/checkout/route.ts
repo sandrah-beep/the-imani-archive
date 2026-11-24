@@ -9,10 +9,10 @@ const admin = () => createClient(
 );
 
 function ugandaPhone(value: string) {
-  const digits = value.replace(/[\\s()-]/g, "");
-  if (/^0\\d{9}$/.test(digits)) return `+256${digits.slice(1)}`;
-  if (/^256\\d{9}$/.test(digits)) return `+${digits}`;
-  if (/^\\+256\\d{9}$/.test(digits)) return digits;
+  const digits = value.replace(/[\s()-]/g, "");
+  if (/^0\d{9}$/.test(digits)) return `+256${digits.slice(1)}`;
+  if (/^256\d{9}$/.test(digits)) return `+${digits}`;
+  if (/^\+256\d{9}$/.test(digits)) return digits;
   return null;
 }
 
