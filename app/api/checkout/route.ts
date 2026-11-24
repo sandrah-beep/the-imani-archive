@@ -97,6 +97,7 @@ export async function POST(req: Request) {
       .single();
 
     if (customerError || !customer) {
+      console.error("Checkout customer insert failed:", customerError);
       return NextResponse.json({ error: "We couldn't save your customer details. Please try again." }, { status: 500 });
     }
 
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
       .single();
 
     if (orderError || !order) {
+      console.error("Checkout order insert failed:", orderError);
       return NextResponse.json({ error: "We couldn't create your order. Please try again." }, { status: 500 });
     }
 
@@ -127,6 +129,7 @@ export async function POST(req: Request) {
     );
 
     if (itemError) {
+      console.error("Checkout order_items insert failed:", itemError);
       await sb.from("orders").delete().eq("id", order.id);
       return NextResponse.json({ error: "We couldn't save your order items." }, { status: 500 });
     }
@@ -170,6 +173,7 @@ export async function POST(req: Request) {
       message: "Payment request sent. Please check your phone and approve the Mobile Money prompt. Your order will be confirmed after MarzPay verifies the payment."
     });
   } catch (error) {
+    console.error("Checkout unexpected error:", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unexpected checkout error."
     }, { status: 400 });
