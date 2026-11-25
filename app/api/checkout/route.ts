@@ -79,6 +79,7 @@ export async function POST(req: Request) {
         product_name: product.name,
         quantity,
         unit_price: Number(product.price),
+        subtotal: Number(product.price) * quantity,
         line_total: Number(product.price) * quantity
       };
     });
