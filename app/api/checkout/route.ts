@@ -19,7 +19,7 @@ function ugandaPhone(value: string) {
 function detectedNetwork(phone: string) {
   // phone is normalized to +256XXXXXXXXX, so the leading local 0 is absent.
   const national = phone.slice(4);
-  if (/^7[0-5]/.test(national)) return "Airtel";
+  if (/^7[0-5]/.test(national)) return "AIRTEL";
   if (/^7[6-8]/.test(national) || /^3[19]/.test(national)) return "MTN";
   return null;
 }
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const items = body.items;
 
     if (!c?.name || !c?.phone || !c?.address || !c?.district ||
-        !["MTN", "Airtel"].includes(c?.paymentNetwork) ||
+        !["MTN", "AIRTEL"].includes(String(c?.paymentNetwork || "").trim().toUpperCase()) ||
         !Array.isArray(items) || !items.length) {
       return NextResponse.json({ error: "Please complete your details, choose MTN or Airtel Money, and check your bag." }, { status: 400 });
     }
@@ -47,7 +47,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Enter a valid Uganda mobile money number, for example 0771234567." }, { status: 400 });
     }
     const network = detectedNetwork(paymentPhone);
-    if (!network || network !== c.paymentNetwork) {
+    const selectedNetwork = String(c.paymentNetwork || "").trim().toUpperCase();
+    if (!network || network !== selectedNetwork) {
       return NextResponse.json({ error: "The mobile money number does not appear to match the network selected. Please check the number and network." }, { status: 400 });
     }
 
