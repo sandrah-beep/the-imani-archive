@@ -91,15 +91,41 @@ export async function POST(req: Request) {
     // MarzPay requires a unique UUID v4 reference. We also use it to match callbacks to this order.
     const reference = randomUUID();
 
-    const { data: customer, error: customerError } = await sb
+    // Reuse an existing customer record when the phone number is already registered.
+    // The customers.phone column has a unique constraint, so inserting it again would fail.
+    let { data: customer, error: customerError } = await sb
       .from("customers")
-      .insert({ full_name: c.name, phone: c.phone, email: c.email || null })
       .select("id")
-      .single();
+      .eq("phone", c.phone)
+      .maybeSingle();
 
-    if (customerError || !customer) {
-      console.error("Checkout customer insert failed:", customerError);
-      return NextResponse.json({ error: "We couldn't save your customer details. Please try again." }, { status: 500 });
+    if (customerError) {
+      console.error("Checkout customer lookup failed:", customerError);
+      return NextResponse.json({ error: "We couldn't look up your customer details. Please try again." }, { status: 500 });
+    }
+
+    if (customer) {
+      const { error: customerUpdateError } = await sb
+        .from("customers")
+        .update({ full_name: c.name, email: c.email || null })
+        .eq("id", customer.id);
+
+      if (customerUpdateError) {
+        console.error("Checkout customer update failed:", customerUpdateError);
+        return NextResponse.json({ error: "We couldn't update your customer details. Please try again." }, { status: 500 });
+      }
+    } else {
+      const { data: newCustomer, error: customerInsertError } = await sb
+        .from("customers")
+        .insert({ full_name: c.name, phone: c.phone, email: c.email || null })
+        .select("id")
+        .single();
+
+      if (customerInsertError || !newCustomer) {
+        console.error("Checkout customer insert failed:", customerInsertError);
+        return NextResponse.json({ error: "We couldn't save your customer details. Please try again." }, { status: 500 });
+      }
+      customer = newCustomer;
     }
 
     const { data: order, error: orderError } = await sb
