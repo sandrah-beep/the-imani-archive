@@ -9,8 +9,9 @@ export async function POST(request: Request) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { autoRefreshToken: false, persistSession: false } });
     const auth = await supabase.auth.getUser(token);
     const user = auth.data.user;
-    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
-    if (auth.error || !user || !adminEmail || user.email?.toLowerCase() !== adminEmail.toLowerCase()) return NextResponse.json({ error: "You are not authorized to run this test." }, { status: 403 });
+    const configuredAdminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim().toLowerCase();
+    if (auth.error || !user?.email || (configuredAdminEmail && user.email.toLowerCase() !== configuredAdminEmail)) return NextResponse.json({ error: "This signed-in account is not authorised for the notification test." }, { status: 403 });
+    const adminEmail = configuredAdminEmail || user.email;
     const outcomes: Record<string, string> = {};
     const phones = (process.env.ADMIN_NOTIFICATION_PHONES || "").split(",").map((x) => x.trim()).filter(Boolean);
     if (process.env.AT_API_KEY && process.env.AT_USERNAME && phones.length) {
