@@ -9,11 +9,11 @@ export async function POST(request: Request) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { autoRefreshToken: false, persistSession: false } });
     const auth = await supabase.auth.getUser(token);
     const user = auth.data.user;
-    const configuredAdminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim().toLowerCase();
-    if (auth.error || !user?.email || (configuredAdminEmail && user.email.toLowerCase() !== configuredAdminEmail)) return NextResponse.json({ error: "This signed-in account is not authorised for the notification test." }, { status: 403 });
-    const adminEmail = configuredAdminEmail || user.email;
+    const allowedAdminEmail = (process.env.ADMIN_AUTH_EMAIL || "theimaniarchive@gmail.com").trim().toLowerCase();
+    if (auth.error || !user?.email || user.email.toLowerCase() !== allowedAdminEmail) return NextResponse.json({ error: "Please sign in with the authorised Imani Archive admin account." }, { status: 403 });
+    const adminEmail = (process.env.ADMIN_NOTIFICATION_EMAIL || "sandrahgidudu@gmail.com").trim();
     const outcomes: Record<string, string> = {};
-    const phones = (process.env.ADMIN_NOTIFICATION_PHONES || "").split(",").map((x) => x.trim()).filter(Boolean);
+    const phones = (process.env.ADMIN_NOTIFICATION_PHONES || process.env.ADMIN_NOTIFICATION_PHONE || "+256709473300,+256731405966").split(",").map((x) => x.trim()).filter(Boolean);
     if (process.env.AT_API_KEY && process.env.AT_USERNAME && phones.length) {
       const endpoint = process.env.AT_ENVIRONMENT === "sandbox" ? "https://api.sandbox.africastalking.com/version1/messaging" : "https://api.africastalking.com/version1/messaging";
       const body = new URLSearchParams({ username: process.env.AT_USERNAME, to: phones.join(","), message: "THE IMANI ARCHIVE TEST: Notification setup check. No order or payment was made." });
