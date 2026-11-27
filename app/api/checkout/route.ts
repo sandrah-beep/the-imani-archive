@@ -42,6 +42,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Please complete your details, choose MTN or Airtel Money, and check your bag." }, { status: 400 });
     }
 
+    const customerContactPhone = ugandaPhone(String(c.phone));
+    if (!customerContactPhone) {
+      return NextResponse.json({ error: "Enter a valid Uganda contact number, for example 0771234567." }, { status: 400 });
+    }
+
     const paymentPhone = ugandaPhone(String(c.paymentPhone || c.phone));
     if (!paymentPhone) {
       return NextResponse.json({ error: "Enter a valid Uganda mobile money number, for example 0771234567." }, { status: 400 });
@@ -135,7 +140,7 @@ export async function POST(req: Request) {
         order_reference: reference,
         customer_id: customer.id,
         customer_name: c.name,
-        customer_phone: c.phone,
+        customer_phone: customerContactPhone,
         subtotal,
         total_amount: subtotal,
         payment_network: network,
