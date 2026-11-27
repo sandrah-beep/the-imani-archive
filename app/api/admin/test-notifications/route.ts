@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const adminEmail = (process.env.ADMIN_NOTIFICATION_EMAIL || "sandrahgidudu@gmail.com").trim();
     const requestBody = await request.json().catch(() => ({}));
     const customerPhone = String(requestBody?.customerPhone || "").trim();
-    if (customerPhone && !/^\\+?[0-9]{8,15}$/.test(customerPhone)) {
+    if (customerPhone && !/^\+?[0-9]{8,15}$/.test(customerPhone)) {
       return NextResponse.json({ error: "Enter a valid phone number in international format." }, { status: 400 });
     }
     const outcomes: Record<string, string> = {};
