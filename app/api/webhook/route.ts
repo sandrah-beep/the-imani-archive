@@ -31,6 +31,14 @@ async function sendAdminNotifications(order: any) {
   ].join("\n");
 
   const tasks: Promise<unknown>[] = [];
+  const customerPhone = String(order.customer_phone || "").trim();
+  const customerSmsMessage = [
+    "THE IMANI ARCHIVE: Your payment is confirmed!",
+    `Order: ${order.order_reference}`,
+    `Items: ${itemsText}`,
+    `Total paid: ${formatUgx(order.total_amount)}`,
+    "Thank you for shopping with us. We will contact you about delivery."
+  ].join("\\n");
 
   if (phones.length && process.env.AT_API_KEY && process.env.AT_USERNAME) {
     const endpoint = process.env.AT_ENVIRONMENT === "sandbox"
@@ -53,6 +61,31 @@ async function sendAdminNotifications(order: any) {
     }).then(async (response) => {
       const result = await response.text();
       if (!response.ok) throw new Error(`Africa's Talking SMS failed (${response.status}): ${result}`);
+      return result;
+    }));
+  }
+
+  if (customerPhone && process.env.AT_API_KEY && process.env.AT_USERNAME) {
+    const endpoint = process.env.AT_ENVIRONMENT === "sandbox"
+      ? "https://api.sandbox.africastalking.com/version1/messaging"
+      : "https://api.africastalking.com/version1/messaging";
+    const body = new URLSearchParams({
+      username: process.env.AT_USERNAME,
+      to: customerPhone,
+      message: customerSmsMessage
+    });
+    tasks.push(fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Apikey: process.env.AT_API_KEY,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body,
+      cache: "no-store"
+    }).then(async (response) => {
+      const result = await response.text();
+      if (!response.ok) throw new Error(`Customer Africa's Talking SMS failed (${response.status}): ${result}`);
       return result;
     }));
   }
