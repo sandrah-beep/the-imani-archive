@@ -38,7 +38,7 @@ async function sendAdminNotifications(order: any) {
     `Items: ${itemsText}`,
     `Total paid: ${formatUgx(order.total_amount)}`,
     "Thank you for shopping with us. We will contact you about delivery."
-  ].join("\\n");
+  ].join("\n");
 
   if (phones.length && process.env.AT_API_KEY && process.env.AT_USERNAME) {
     const endpoint = process.env.AT_ENVIRONMENT === "sandbox"
